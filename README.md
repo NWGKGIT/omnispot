@@ -98,6 +98,13 @@ Detailed architecture and component notes are available in [docs/HOW_IT_WORKS.md
   sudo pacman -S hostapd
   ```
 
+- **Panel reports `Could not create ap0`**:
+  Your Wi-Fi card or driver does not support creating a secondary virtual access point while actively connected to Wi-Fi. You can verify your card's capabilities with:
+  ```bash
+  iw list | grep -E -A 5 "valid interface combinations|Supported interface modes"
+  ```
+  Look for `AP` under supported modes and `#{ managed } <= 1, #{ AP } <= 1` under valid interface combinations. If your card supports standalone AP mode but not concurrent station mode, Omnispot will still work when your laptop is connected via Ethernet.
+
 - **Panel reports an error starting with `hostapd:`**:
   Your wireless adapter might not support access point mode on the current channel. Certain adapters restrict 5 GHz access point creation. If sharing Wi-Fi, connect your laptop to a 2.4 GHz network so the hotspot follows it; if sharing Ethernet, select 2.4 GHz in the band dropdown.
 

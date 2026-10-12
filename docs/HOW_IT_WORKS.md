@@ -59,3 +59,11 @@ HotspotState employs an adaptive polling interval to minimize overhead:
 | `/usr/local/bin/omnispot-helper` | Privileged helper script |
 | `/etc/polkit-1/rules.d/49-omnispot.rules` | Polkit authorization for local active users |
 | `/etc/NetworkManager/conf.d/omnispot.conf` | Prevents NetworkManager from interfering with `ap0` |
+
+## Hardware Compatibility
+
+Omnispot relies on Linux nl80211 virtual interface support:
+
+- **AP Mode Support**: The wireless chipset and kernel driver must list `AP` under supported interface modes (`iw list`).
+- **Concurrent Station + AP**: Simultaneous Wi-Fi client and hotspot broadcasting requires driver support for concurrent interfaces (e.g. `#{ managed } <= 1, #{ AP } <= 1` under valid interface combinations). Most modern Intel, Qualcomm/Atheros, and MediaTek chips support this.
+- **Fallback for Non-concurrent Hardware**: If a card supports AP mode but cannot maintain a station connection at the same time, Omnispot will still work whenever the laptop is connected via Ethernet or another network adapter.
