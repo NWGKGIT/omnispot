@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "hotspot.omarchy",
+  "name": "Omnispot",
+  "version": "1.0.0",
+  "author": "Nahom WG",
+  "license": "MIT",
+  "description": "Native mobile hotspot for Omarchy: share your connection with one toggle.",
+  "homepage": "https://github.com/nwgkgit/omnispot",
+  "kinds": ["bar-widget"],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Hotspot",
+    "description": "Turn a mobile hotspot on or off and edit its name and password.",
+    "category": "Network",
+    "allowMultiple": false,
+    "defaultSection": "left"
+  }
+}
