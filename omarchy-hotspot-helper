@@ -1,0 +1,113 @@
+#!/bin/bash
+# Root side of the hotspot.omarchy widget, installed by `hotspot.py setup` to
+# /usr/local/bin and run through pkexec. It runs hostapd + dnsmasq on a virtual
+# AP interface on the Wi-Fi card and NATs it to whatever the uplink is.
+#
+#   up    reads wifi-dev, ssid, password, hw-mode (g|a), channel, subnet from stdin
+#   down  tears everything down
+set -u
+AP=ap0
+RUN=/run/omarchy-hotspot
+
+fw() {
+  local net=$1 action=$2
+  iptables -w "$action" INPUT -i "$AP" -j ACCEPT
+  iptables -w "$action" FORWARD -i "$AP" -j ACCEPT
+  iptables -w "$action" FORWARD -o "$AP" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+  iptables -w -t nat "$action" POSTROUTING -s "$net" ! -o "$AP" -j MASQUERADE
+}
+
+down() {
+  for p in hostapd dnsmasq; do
+    if [ -f "$RUN/$p.pid" ]; then
+      pid=$(cat "$RUN/$p.pid")
+      # Graceful: SIGTERM first, wait up to 5 seconds, then SIGKILL.
+      kill "$pid" 2>/dev/null
+      for _ in $(seq 1 50); do
+        kill -0 "$pid" 2>/dev/null || break
+        sleep 0.1
+      done
+      kill -0 "$pid" 2>/dev/null && kill -9 "$pid" 2>/dev/null
+      rm -f "$RUN/$p.pid"
+    fi
+  done
+  if [ -f "$RUN/subnet" ]; then
+    fw "$(cat "$RUN/subnet")" -D 2>/dev/null
+    rm -f "$RUN/subnet"
+  else
+    iptables -w -D INPUT -i "$AP" -j ACCEPT 2>/dev/null
+    iptables -w -D FORWARD -i "$AP" -j ACCEPT 2>/dev/null
+    iptables -w -D FORWARD -o "$AP" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null
+  fi
+  [ -e "/sys/class/net/$AP" ] && iw dev "$AP" del
+  return 0
+}
+
+bad() { echo "$*" >&2; exit 1; }
+fail() { echo "$*" >&2; down; exit 1; }
+
+up() {
+  read -r dev; read -r ssid; read -r pass; read -r mode; read -r chan; read -r subnet
+  # Everything here ends up in a root-owned config, so validate first.
+  case "$dev" in ''|*[!a-zA-Z0-9]*) bad "Invalid Wi-Fi device" ;; esac
+  case "$mode" in g|a) ;; *) bad "Invalid band" ;; esac
+  case "$chan" in ''|*[!0-9]*) bad "Invalid channel" ;; esac
+  n=$(printf %s "$ssid" | wc -c)
+  [ "$n" -ge 1 ] && [ "$n" -le 32 ] || bad "Network name must be 1-32 characters"
+  [ ${#pass} -ge 8 ] && [ ${#pass} -le 63 ] || bad "Password must be 8-63 characters"
+  [ -d "/sys/class/net/$dev/wireless" ] || bad "$dev is not a Wi-Fi device"
+
+  # Validate and derive subnet components.
+  # subnet looks like "10.42.0.0/24": extract the first three octets.
+  NET=$(echo "$subnet" | cut -d/ -f1 | cut -d. -f1-3)
+  case "$NET" in ''|*[!0-9.]*) NET="10.42.0" ;; esac
+
+  down
+  mkdir -p "$RUN" && chmod 755 "$RUN"
+
+  # Same MAC as the card, but locally administered and with the last bit flipped.
+  mac=$(cat "/sys/class/net/$dev/address")
+  first=$(printf %02x $(( 0x${mac%%:*} | 2 )))
+  last=$(printf %02x $(( 0x${mac##*:} ^ 1 )))
+  mid=${mac#*:}; mid=${mid%:*}
+  iw dev "$dev" interface add "$AP" type __ap addr "$first:$mid:$last" || fail "Could not create $AP"
+  nmcli device set "$AP" managed no >/dev/null 2>&1
+
+  (umask 077; cat >"$RUN/hostapd.conf" <<CONF
+interface=$AP
+driver=nl80211
+ssid=$ssid
+hw_mode=$mode
+channel=$chan
+ieee80211n=1
+wmm_enabled=1
+auth_algs=1
+wpa=2
+wpa_key_mgmt=WPA-PSK
+rsn_pairwise=CCMP
+wpa_passphrase=$pass
+CONF
+)
+  out=$(hostapd -B -P "$RUN/hostapd.pid" "$RUN/hostapd.conf" 2>&1) ||
+    fail "hostapd: $(printf '%s\n' "$out" | grep -v '^Configuration file' | tail -1)"
+
+  ip addr flush dev "$AP"
+  ip addr add "$NET.1/24" dev "$AP"
+  ip link set "$AP" up
+
+  dnsmasq --conf-file=/dev/null --interface="$AP" --bind-interfaces \
+    --listen-address="$NET.1" --dhcp-range="$NET.10,$NET.254,255.255.255.0,12h" \
+    --dhcp-option=option:router,"$NET.1" --dhcp-option=option:dns-server,"$NET.1" \
+    --dhcp-leasefile="$RUN/leases" --pid-file="$RUN/dnsmasq.pid" ||
+    fail "Could not start dnsmasq"
+
+  sysctl -qw net.ipv4.ip_forward=1
+  echo "$subnet" > "$RUN/subnet"
+  fw "$subnet" -I || fail "Could not set up firewall rules"
+}
+
+case "${1-}" in
+  up) up ;;
+  down) down ;;
+  *) echo "usage: $0 up|down" >&2; exit 2 ;;
+esac
