@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Tests and manifest
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install test dependencies
+        run: pip install pytest
+
+      - name: Run tests
+        run: pytest test/ -v
+
+      - name: Manifest and entry points
+        run: |
+          python3 -c '
+          import json, pathlib
+          m = json.loads(pathlib.Path("manifest.json").read_text())
+          assert m["schemaVersion"] == 1, "schemaVersion must be 1"
+          for key in ["id", "name", "version", "kinds", "entryPoints", "homepage"]:
+              assert key in m, f"manifest missing {key}"
+          for kind, f in m["entryPoints"].items():
+              assert not f.startswith("/") and ".." not in f, f"{kind} must be safe relative path"
+              assert pathlib.Path(f).exists(), f"{kind} -> {f} not found"
+              print(f"{kind} -> {f}")
+          '
+
+      - name: Lint
+        run: |
+          pip install ruff
+          ruff check lib/ test/
