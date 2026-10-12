@@ -40,14 +40,14 @@ _config_home = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
 CONFIG_DIR = _config_home / "omarchy" / "hotspot"
 SETTINGS = CONFIG_DIR / "settings.json"
 
-RUN_DIR = Path(os.environ.get("HOTSPOT_RUN", "/run/omarchy-hotspot"))
+RUN_DIR = Path(os.environ.get("HOTSPOT_RUN", "/run/omnispot"))
 
 HELPER = Path(os.environ.get(
     "HOTSPOT_HELPER",
-    "/usr/local/bin/omarchy-hotspot-helper",
+    "/usr/local/bin/omnispot-helper",
 ))
-POLKIT_RULE = Path("/etc/polkit-1/rules.d/49-omarchy-hotspot.rules")
-NM_CONF = Path("/etc/NetworkManager/conf.d/omarchy-hotspot.conf")
+POLKIT_RULE = Path("/etc/polkit-1/rules.d/49-omnispot.rules")
+NM_CONF = Path("/etc/NetworkManager/conf.d/omnispot.conf")
 
 # ---------------------------------------------------------------------------
 # JSON output helpers
@@ -299,7 +299,7 @@ def band_pref(settings: dict) -> str:
 
 def helper_installed() -> bool:
     """True if the installed helper matches the bundled one and hostapd exists."""
-    bundled = HERE / "omarchy-hotspot-helper"
+    bundled = HERE / "omnispot-helper"
     if not HELPER.exists() or not bundled.exists():
         return False
     try:
@@ -502,7 +502,7 @@ def cmd_setup() -> None:
         )
 
     # Install the helper.
-    bundled_helper = HERE / "omarchy-hotspot-helper"
+    bundled_helper = HERE / "omnispot-helper"
     if not bundled_helper.exists():
         respond_error("Bundled helper not found")
 
@@ -514,7 +514,7 @@ def cmd_setup() -> None:
     NM_CONF.parent.mkdir(parents=True, exist_ok=True)
     NM_CONF.write_text(textwrap.dedent(f"""\
         # The omnispot.omarchy widget runs hostapd on {AP} itself.
-        [device-omarchy-hotspot]
+        [device-omnispot]
         match-device=interface-name:{AP}
         managed=0
     """))

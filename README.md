@@ -24,7 +24,7 @@ omarchy bar move omnispot.omarchy --section left
 ```
 
 Click the hotspot icon in the bar, click **Set up**, and authenticate with your password. This one-time step:
-- Installs the privileged helper (`omarchy-hotspot-helper`)
+- Installs the privileged helper (`omnispot-helper`)
 - Configures NetworkManager to unmanage the virtual `ap0` interface
 - Adds a polkit rule allowing your active user session to control the hotspot without prompting for passwords
 
@@ -85,7 +85,7 @@ rm -rf ~/.config/omarchy/hotspot
 Most contemporary Wi-Fi chipsets support simultaneous client and access point operation via multiple virtual interfaces (`__ap` mode). Omnispot leverages this capability directly:
 
 - **`lib/hotspot.py`**: Runs in your user session. Discovers network devices, resolves subnet conflicts, handles settings persistence in `~/.config/omarchy/hotspot/settings.json`, and communicates with QML via structured JSON.
-- **`omarchy-hotspot-helper`**: Runs as root via `pkexec`. Creates the virtual `ap0` interface, runs `hostapd` and `dnsmasq`, and manages `iptables` NAT forwarding.
+- **`omnispot-helper`**: Runs as root via `pkexec`. Creates the virtual `ap0` interface, runs `hostapd` and `dnsmasq`, and manages `iptables` NAT forwarding.
 - **Subnet Isolation**: Subnet assignment defaults to `10.42.0.0/24`. If another interface conflicts, Omnispot automatically selects the next available candidate from the routing table.
 
 Detailed architecture and component notes are available in [docs/HOW_IT_WORKS.md](docs/HOW_IT_WORKS.md).
@@ -133,7 +133,7 @@ All test cases mock network interfaces and root commands, enabling full executio
 ├── BarWidget.qml              Omarchy top-bar widget
 ├── HotspotPanel.qml           Dropdown control and settings panel
 ├── HotspotState.qml           QML to Python IPC bridge
-├── omarchy-hotspot-helper     Root helper script (hostapd, dnsmasq, iptables)
+├── omnispot-helper            Root helper script (hostapd, dnsmasq, iptables)
 ├── manifest.json              Omarchy plugin manifest
 ├── pyproject.toml             uv and Python packaging configuration
 ├── lib/

@@ -15,7 +15,7 @@ Omnispot connects three main components: a QML interface for the Omarchy desktop
     │   QML to Python  │                  └───────────┬───────────┘
     └──────────────────┘                              │ pkexec
                                           ┌───────────▼───────────┐
-                                          │ omarchy-hotspot-helper │
+                                          │ omnispot-helper       │
                                           │   (root, bash)        │
                                           │   up / down           │
                                           └───────────────────────┘
@@ -37,7 +37,7 @@ The backend coordinates system detection and configuration logic:
 - Dispatches privileged network operations to the root helper via `pkexec`.
 - Reports responses as clean JSON objects (`{"ok": true, "data": ...}` or `{"ok": false, "error": ...}`).
 
-## Privileged Helper (`omarchy-hotspot-helper`)
+## Privileged Helper (`omnispot-helper`)
 
 The root helper manages the virtual wireless interface and packet routing:
 - Creates a virtual access point interface (`ap0`) on the wireless card.
@@ -56,6 +56,6 @@ HotspotState employs an adaptive polling interval to minimize overhead:
 
 | Path | Purpose |
 |------|---------|
-| `/usr/local/bin/omarchy-hotspot-helper` | Privileged helper script |
-| `/etc/polkit-1/rules.d/49-omarchy-hotspot.rules` | Polkit authorization for local active users |
-| `/etc/NetworkManager/conf.d/omarchy-hotspot.conf` | Prevents NetworkManager from interfering with `ap0` |
+| `/usr/local/bin/omnispot-helper` | Privileged helper script |
+| `/etc/polkit-1/rules.d/49-omnispot.rules` | Polkit authorization for local active users |
+| `/etc/NetworkManager/conf.d/omnispot.conf` | Prevents NetworkManager from interfering with `ap0` |

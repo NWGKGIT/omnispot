@@ -7,7 +7,7 @@
 #   down  tears everything down
 set -u
 AP=ap0
-RUN=/run/omarchy-hotspot
+RUN=/run/omnispot
 
 fw() {
   local net=$1 action=$2

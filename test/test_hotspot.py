@@ -187,21 +187,21 @@ class TestHelperDetection:
         assert hotspot.helper_installed() is False
 
     def test_installed_and_matches(self, isolated_env):
-        bundled = hotspot.HERE / "omarchy-hotspot-helper"
+        bundled = hotspot.HERE / "omnispot-helper"
         if bundled.exists():
             isolated_env["helper"].write_bytes(bundled.read_bytes())
             with patch("shutil.which", return_value="/usr/bin/hostapd"):
                 assert hotspot.helper_installed() is True
 
     def test_installed_but_different(self, isolated_env):
-        bundled = hotspot.HERE / "omarchy-hotspot-helper"
+        bundled = hotspot.HERE / "omnispot-helper"
         if bundled.exists():
             isolated_env["helper"].write_text("# modified version\n")
             with patch("shutil.which", return_value="/usr/bin/hostapd"):
                 assert hotspot.helper_installed() is False
 
     def test_installed_but_no_hostapd(self, isolated_env):
-        bundled = hotspot.HERE / "omarchy-hotspot-helper"
+        bundled = hotspot.HERE / "omnispot-helper"
         if bundled.exists():
             isolated_env["helper"].write_bytes(bundled.read_bytes())
             with patch("shutil.which", return_value=None):
