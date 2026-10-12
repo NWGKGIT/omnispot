@@ -20,7 +20,7 @@ omarchy plugin add https://github.com/nwgkgit/omnispot.git --enable
 Optionally adjust widget position on the bar:
 
 ```bash
-omarchy bar move hotspot.omarchy --section left
+omarchy bar move omnispot.omarchy --section left
 ```
 
 Click the hotspot icon in the bar, click **Set up**, and authenticate with your password. This one-time step:
@@ -47,7 +47,7 @@ Once setup is complete, click the toggle to activate your hotspot.
 ### Updating
 
 ```bash
-omarchy plugin update hotspot.omarchy
+omarchy plugin update omnispot.omarchy
 omarchy restart shell
 ```
 
@@ -56,13 +56,13 @@ omarchy restart shell
 Remove system-level files installed during setup:
 
 ```bash
-python3 ~/.config/omarchy/plugins/hotspot.omarchy/lib/hotspot.py uninstall
+python3 ~/.config/omarchy/plugins/omnispot.omarchy/lib/hotspot.py uninstall
 ```
 
 Then remove the plugin:
 
 ```bash
-omarchy plugin remove hotspot.omarchy
+omarchy plugin remove omnispot.omarchy
 ```
 
 User configuration files can optionally be deleted:
@@ -78,7 +78,7 @@ rm -rf ~/.config/omarchy/hotspot
 - **Live Device Monitoring**: Displays connected clients, hostnames, and assigned DHCP addresses in real time.
 - **Band Handling**: When sharing a wired/Ethernet connection, choose between 2.4 GHz, 5 GHz, or any available band. When sharing an active Wi-Fi connection, Omnispot automatically matches your Wi-Fi card's active channel and band.
 - **WPA2 Security**: Built-in credential generator with visibility toggle.
-- **CLI and IPC Integration**: Scriptable via `omarchy-shell` (e.g. `omarchy-shell hotspot.omarchy start`).
+- **CLI and IPC Integration**: Scriptable via `omarchy-shell` (e.g. `omarchy-shell omnispot.omarchy start`).
 
 ## How It Works
 

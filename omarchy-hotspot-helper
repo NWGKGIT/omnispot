@@ -1,5 +1,5 @@
 #!/bin/bash
-# Root side of the hotspot.omarchy widget, installed by `hotspot.py setup` to
+# Root side of the omnispot.omarchy widget, installed by `hotspot.py setup` to
 # /usr/local/bin and run through pkexec. It runs hostapd + dnsmasq on a virtual
 # AP interface on the Wi-Fi card and NATs it to whatever the uplink is.
 #

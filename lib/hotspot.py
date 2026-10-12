@@ -1,4 +1,4 @@
-"""Mobile hotspot backend for the hotspot.omarchy bar widget.
+"""Mobile hotspot backend for the omnispot.omarchy bar widget.
 
 Commands
 --------
@@ -513,7 +513,7 @@ def cmd_setup() -> None:
     # NetworkManager: ignore the AP interface.
     NM_CONF.parent.mkdir(parents=True, exist_ok=True)
     NM_CONF.write_text(textwrap.dedent(f"""\
-        # The hotspot.omarchy widget runs hostapd on {AP} itself.
+        # The omnispot.omarchy widget runs hostapd on {AP} itself.
         [device-omarchy-hotspot]
         match-device=interface-name:{AP}
         managed=0
@@ -524,7 +524,7 @@ def cmd_setup() -> None:
     # Polkit: let the logged-in user run the helper without a password.
     POLKIT_RULE.parent.mkdir(parents=True, exist_ok=True)
     POLKIT_RULE.write_text(textwrap.dedent(f"""\
-        // Lets local active users start/stop the hotspot.omarchy widget's hotspot.
+        // Lets local active users start/stop the omnispot.omarchy widget's hotspot.
         polkit.addRule(function(action, subject) {{
           if (action.id == "org.freedesktop.policykit.exec" &&
               action.lookup("program") == "{HELPER}" &&

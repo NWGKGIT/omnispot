@@ -6,7 +6,7 @@ import qs.Ui
 
 BarWidget {
   id: root
-  moduleName: "hotspot.omarchy"
+  moduleName: "omnispot.omarchy"
   property bool panelOpen: false
   property bool panelRequested: false
   readonly property bool on: state.status.on === true
@@ -47,7 +47,7 @@ BarWidget {
   onBarChanged: if (panelLoader.item) panelLoader.item.bar = bar
 
   IpcHandler {
-    target: "hotspot.omarchy"
+    target: "omnispot.omarchy"
     function open(): void { root.open() }
     function close(): void { root.close() }
     function toggle(): void { root.toggle() }
