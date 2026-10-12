@@ -473,6 +473,12 @@ def cmd_set(args: list[str]) -> None:
 
 
 def cmd_setup() -> None:
+    # Check for hostapd before requesting root privileges:
+    if not shutil.which("hostapd"):
+        respond_error(
+            "hostapd is required but not installed. Install it with: sudo pacman -S hostapd"
+        )
+
     # If not root, re-exec through pkexec.
     if os.geteuid() != 0:
         result = subprocess.run(
@@ -481,15 +487,21 @@ def cmd_setup() -> None:
             capture_output=True,
             text=True,
         )
+        stdout = result.stdout.strip()
+        if stdout:
+            try:
+                data = json.loads(stdout)
+                if not data.get("ok"):
+                    respond_error(data.get("error", "Setup failed"))
+            except (json.JSONDecodeError, TypeError):
+                pass
+            print(stdout)
+            sys.exit(0 if result.returncode == 0 else 1)
+
         if result.returncode != 0:
             err = result.stderr.strip().splitlines()
             msg = err[-1] if err else "Setup failed"
             respond_error(msg)
-        # Forward the child's stdout (which is our JSON).
-        stdout = result.stdout.strip()
-        if stdout:
-            print(stdout)
-            sys.exit(0)
         respond_ok()
         return
 
@@ -497,8 +509,7 @@ def cmd_setup() -> None:
 
     if not shutil.which("hostapd"):
         respond_error(
-            "hostapd is required but not installed.\n"
-            "Install it with: sudo pacman -S hostapd"
+            "hostapd is required but not installed. Install it with: sudo pacman -S hostapd"
         )
 
     # Install the helper.
