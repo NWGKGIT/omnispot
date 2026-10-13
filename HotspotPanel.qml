@@ -27,6 +27,7 @@ KeyboardPanel {
     (shown.password.length < 8 || shown.password.length > 63) ? "Password must be 8-63 characters" : ""
 
   function edit(key, value) {
+    if (root.state && root.state.error !== "") root.state.clearError()
     var next = {ssid: shown.ssid, password: shown.password, band: shown.band}
     next[key] = value
     draft = next
@@ -65,7 +66,10 @@ KeyboardPanel {
     id: keyCatcher
     anchors.fill: parent
     blocked: (ssidField && ssidField.activeFocus) || (passwordField && passwordField.activeFocus)
-    onCloseRequested: root.close()
+    onCloseRequested: {
+      if (root.state) root.state.clearError()
+      root.close()
+    }
     onTabRequested: function(direction) { root.switchPanel(direction) }
 
     ColumnLayout {
@@ -109,13 +113,23 @@ KeyboardPanel {
       }
     }
 
-    Text {
+    RowLayout {
       Layout.fillWidth: true
       visible: root.state && root.state.error !== ""
-      text: root.state ? root.state.error : ""
-      color: root.urgent
-      font.family: root.fontFamily
-      wrapMode: Text.WordWrap
+      spacing: Style.space(8)
+      Text {
+        Layout.fillWidth: true
+        text: root.state ? root.state.error : ""
+        color: root.urgent
+        font.family: root.fontFamily
+        wrapMode: Text.WordWrap
+      }
+      PanelActionButton {
+        iconText: "󰅖"
+        tooltipText: "Dismiss"
+        foreground: root.urgent
+        onClicked: if (root.state) root.state.clearError()
+      }
     }
 
     RowLayout {
@@ -183,16 +197,39 @@ KeyboardPanel {
     }
 
     PanelSectionHeader { text: "BAND"; foreground: root.foreground; fontFamily: root.fontFamily }
-    Dropdown {
+    RowLayout {
       Layout.fillWidth: true
+      visible: root.sharingWifi
+      spacing: Style.space(6)
+      Text {
+        text: "󰤨"
+        color: root.dim
+        font.family: "Symbols Nerd Font"
+        font.pixelSize: Style.font.body
+      }
+      Text {
+        Layout.fillWidth: true
+        text: "Matched to Wi-Fi (" + (root.status.station || "current network") + ")"
+        color: root.dim
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.body
+      }
+    }
+
+    Dropdown {
+      id: bandDropdown
+      Layout.fillWidth: true
+      visible: !root.sharingWifi
       showLabel: false
-      enabled: !root.sharingWifi
-      value: root.sharingWifi ? "match" : root.shown.band
-      options: root.sharingWifi
-        ? [{value: "match", label: "Same as your Wi-Fi connection"}]
-        : [{value: "any", label: "Any available"}, {value: "2.4", label: "2.4 GHz"}, {value: "5", label: "5 GHz"}]
+      options: [{value: "any", label: "Any available"}, {value: "2.4", label: "2.4 GHz"}, {value: "5", label: "5 GHz"}]
       fontFamily: root.fontFamily
       onChanged: function(value) { root.edit("band", value) }
+    }
+
+    Binding {
+      target: bandDropdown
+      property: "value"
+      value: root.shown.band
     }
 
     RowLayout {
@@ -210,7 +247,10 @@ KeyboardPanel {
         text: "Cancel"
         foreground: root.foreground
         fontFamily: root.fontFamily
-        onClicked: root.draft = null
+        onClicked: {
+          root.draft = null
+          if (root.state) root.state.clearError()
+        }
       }
       Button {
         text: "Save"
