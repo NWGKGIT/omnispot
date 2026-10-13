@@ -36,13 +36,17 @@ Once setup is complete, click the toggle to activate your hotspot.
 |---------|---------|-----------------------|
 | `python3` (3.11+) | Backend service logic | Yes |
 | `hostapd` | Access point daemon | No: install with `sudo pacman -S hostapd` |
+| `dnsmasq` | DHCP/DNS for client devices | Install with `sudo pacman -S dnsmasq` |
 | `iw` | Wireless interface configuration | Yes |
-| `dnsmasq` | DHCP/DNS for client devices | Yes |
 | `iptables` | NAT and packet forwarding | Yes |
 | `nmcli` | NetworkManager state queries | Yes |
 | `polkit` | Passwordless helper authorization | Yes |
 
-`hostapd` is the only external dependency required. The setup UI will indicate if it needs to be installed.
+Install the required network services with:
+
+```bash
+sudo pacman -S hostapd dnsmasq
+```
 
 ### Updating
 
@@ -92,10 +96,10 @@ Detailed architecture and component notes are available in [docs/HOW_IT_WORKS.md
 
 ## Troubleshooting
 
-- **"hostapd is required but not installed"**:
-  Install `hostapd` using pacman:
+- **"Missing required programs" or missing dependencies**:
+  Install `hostapd` and `dnsmasq` using pacman:
   ```bash
-  sudo pacman -S hostapd
+  sudo pacman -S hostapd dnsmasq
   ```
 
 - **Panel reports `Could not create ap0`**:

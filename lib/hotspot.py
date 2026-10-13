@@ -505,7 +505,7 @@ def cmd_start() -> None:
         if "Hardware does not support configured channel" in msg or "Could not select hw_mode and channel" in msg:
             msg = (
                 "Your Wi-Fi card does not allow access points on this channel "
-                "(regulatory restriction). Connect to a 2.4 GHz network or use Ethernet."
+                "(regulatory restriction). Disconnect from Wi-Fi, connect to a 2.4 GHz network, or use Ethernet."
             )
         respond_error(msg)
     respond_ok()
