@@ -297,6 +297,13 @@ def band_pref(settings: dict) -> str:
 # Setup detection
 # ---------------------------------------------------------------------------
 
+REQUIRED_TOOLS = ("hostapd", "dnsmasq", "iw", "iptables", "nmcli")
+
+
+def missing_tools() -> list[str]:
+    return [t for t in REQUIRED_TOOLS if shutil.which(t) is None]
+
+
 def helper_installed() -> bool:
     """True if the installed helper matches the bundled one and hostapd exists."""
     bundled = HERE / "omnispot-helper"
@@ -307,7 +314,7 @@ def helper_installed() -> bool:
             return False
     except OSError:
         return False
-    return shutil.which("hostapd") is not None
+    return not missing_tools()
 
 # ---------------------------------------------------------------------------
 # Client enumeration
@@ -347,6 +354,64 @@ def list_clients() -> list[dict]:
 # Commands
 # ---------------------------------------------------------------------------
 
+def phy_of(dev: str) -> str:
+    """Name of the wiphy (e.g. 'phy0') that a Wi-Fi interface belongs to."""
+    try:
+        return Path(f"/sys/class/net/{dev}/phy80211/name").read_text().strip()
+    except OSError:
+        pass
+    for line in run_quiet(["iw", "dev", dev, "info"]).stdout.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and parts[0] == "wiphy":
+            return f"phy{parts[1]}"
+    return ""
+
+
+def pick_5ghz_channel(dev: str) -> str:
+    """A 5 GHz channel the card can currently beacon on, or '' if none.
+
+    Reads the card's own live channel table, which already reflects its
+    regulatory domain, so nothing here depends on a country or a region.
+    """
+    phy = phy_of(dev)
+    if not phy:
+        return ""
+    res = run_quiet(["iw", "phy", phy, "channels"])
+    usable: list[str] = []
+    freq, chan, bad = 0, "", False
+
+    def flush() -> None:
+        if chan and 5000 <= freq < 5925 and not bad:
+            usable.append(chan)
+
+    for line in res.stdout.splitlines():
+        line = line.strip()
+        if line.startswith("*") and "MHz" in line and "[" in line:
+            flush()
+            try:
+                freq = int(line.split()[1])
+                chan = line.split("[")[1].split("]")[0]
+            except (IndexError, ValueError):
+                freq, chan = 0, ""
+            bad = "disabled" in line.lower()
+        elif chan:
+            lower = line.lower()
+            if "no ir" in lower or "disabled" in lower or "radar detection" in lower:
+                bad = True
+    flush()
+
+    for preferred in ("149", "153", "157", "161", "36", "40", "44", "48"):
+        if preferred in usable:
+            return preferred
+    return usable[0] if usable else ""
+
+
+def wifi_radio_on() -> bool:
+    """False when Wi-Fi is switched off (nmcli radio / rfkill)."""
+    res = run_quiet(["nmcli", "radio", "wifi"])
+    return res.returncode != 0 or res.stdout.strip() != "disabled"
+
+
 def cmd_status() -> None:
     settings = ensure_settings()
     wifi = wifi_device()
@@ -374,6 +439,9 @@ def cmd_start() -> None:
     if not wifi:
         respond_error("No Wi-Fi adapter found")
 
+    if not wifi_radio_on():
+        respond_error("Wi-Fi is turned off. Turn Wi-Fi on, then start the hotspot.")
+
     station = station_connection(wifi)
     if station:
         # Follow the Wi-Fi connection's channel.
@@ -390,10 +458,13 @@ def cmd_start() -> None:
                 if "(" in line:
                     freq_str = line.split("(")[1].split()[0]
                     try:
-                        if int(freq_str) >= 5000:
-                            mode = "a"
+                        freq = int(freq_str)
                     except ValueError:
-                        pass
+                        freq = 0
+                    if freq >= 5925:
+                        respond_error("Sharing a 6 GHz Wi-Fi network is not supported. Connect to a 2.4 or 5 GHz network.")
+                    if freq >= 5000:
+                        mode = "a"
                 break
         if not channel:
             channel = "6"
@@ -401,7 +472,9 @@ def cmd_start() -> None:
         b = band_pref(settings)
         if b == "5":
             mode = "a"
-            channel = "36"
+            channel = pick_5ghz_channel(wifi)
+            if not channel:
+                respond_error("Your Wi-Fi card cannot host a 5 GHz hotspot right now. Choose 2.4 GHz or Any in the hotspot settings.")
         else:
             mode = "g"
             channel = "6"
@@ -429,6 +502,11 @@ def cmd_start() -> None:
         # Extract a meaningful message from stderr.
         err = result.stderr.strip().splitlines()
         msg = err[-1] if err else "Could not start the hotspot"
+        if "Hardware does not support configured channel" in msg or "Could not select hw_mode and channel" in msg:
+            msg = (
+                "Your Wi-Fi card does not allow access points on this channel "
+                "(regulatory restriction). Connect to a 2.4 GHz network or use Ethernet."
+            )
         respond_error(msg)
     respond_ok()
 
@@ -451,15 +529,22 @@ def cmd_stop() -> None:
 
 
 def cmd_set(args: list[str]) -> None:
-    if len(args) < 3:
+    # The UI passes the name and password through the environment so the
+    # password never shows up in the process list; the 3-argument form is
+    # kept for command-line use.
+    if len(args) >= 3:
+        ssid, password, band = args[0], args[1], args[2]
+    elif len(args) == 1 and "OMNISPOT_SSID" in os.environ:
+        ssid, password, band = os.environ["OMNISPOT_SSID"], os.environ.get("OMNISPOT_PASS", ""), args[0]
+    else:
         respond_error("Usage: set SSID PASSWORD BAND")
-
-    ssid, password, band = args[0], args[1], args[2]
 
     if not valid_ssid(ssid):
         respond_error("Network name must be 1-32 characters")
     if not valid_pass(password):
         respond_error("Password must be 8-63 printable characters")
+    if band == "match":
+        band = read_settings().get("band", "any")
     if band not in ("any", "2.4", "5"):
         respond_error(f"Unknown band: {band}")
 
@@ -474,9 +559,11 @@ def cmd_set(args: list[str]) -> None:
 
 def cmd_setup() -> None:
     # Check for hostapd before requesting root privileges:
-    if not shutil.which("hostapd"):
+    missing = missing_tools()
+    if missing:
         respond_error(
-            "hostapd is required but not installed. Install it with: sudo pacman -S hostapd"
+            "Missing required programs: " + ", ".join(missing)
+            + ". Install them with your package manager, then run setup again."
         )
 
     # If not root, re-exec through pkexec.
@@ -507,9 +594,11 @@ def cmd_setup() -> None:
 
     # --- Running as root from here. ---
 
-    if not shutil.which("hostapd"):
+    missing = missing_tools()
+    if missing:
         respond_error(
-            "hostapd is required but not installed. Install it with: sudo pacman -S hostapd"
+            "Missing required programs: " + ", ".join(missing)
+            + ". Install them with your package manager, then run setup again."
         )
 
     # Install the helper.

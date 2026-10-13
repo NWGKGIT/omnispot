@@ -23,19 +23,26 @@ Item {
 
   function refresh() { if (!poll.running) poll.running = true }
 
-  function run(args) {
+  function run(args, env) {
     if (busy) return
     error = ""
     busy = true
     action = args[0]
+    runner.environment = env || ({})
     runner.command = ["python3", backend].concat(args)
     runner.running = true
   }
 
+  function clearError() { root.error = "" }
+
   function start() { run(["start"]) }
   function stop() { run(["stop"]) }
   function toggle() { status.on ? stop() : start() }
-  function save(ssid, password, band) { run(["set", ssid, password, band]) }
+  // Name and password go through the environment, not the command line,
+  // so they cannot be read from the process list.
+  function save(ssid, password, band) {
+    run(["set", band], {OMNISPOT_SSID: ssid, OMNISPOT_PASS: password})
+  }
   function setup() { run(["setup"]) }
 
   Process {

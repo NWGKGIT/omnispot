@@ -276,3 +276,106 @@ class TestRandomPassword:
             pw = hotspot.random_password()
             for ch in "0OlI1":
                 assert ch not in pw
+
+
+# ---------------------------------------------------------------------------
+# Regulatory country and 5 GHz channel selection
+# ---------------------------------------------------------------------------
+
+class TestChannels:
+    OUT = (
+        "Band 2:\n"
+        "\t* 5180 MHz [36]\n"
+        "\t  No IR\n"
+        "\t* 5745 MHz [149]\n"
+        "\t  Maximum TX power: 22.0 dBm\n"
+        "Band 4:\n"
+        "\t* 5955 MHz [1]\n"
+    )
+
+    def _pick(self, out):
+        with patch("hotspot.phy_of", return_value="phy0"), patch("hotspot.run_quiet") as m:
+            m.return_value = MagicMock(returncode=0, stdout=out)
+            return hotspot.pick_5ghz_channel("wlo1")
+
+    def test_picks_unrestricted(self):
+        assert self._pick(self.OUT) == "149"
+
+    def test_ignores_6ghz(self):
+        assert self._pick("\t* 5955 MHz [1]\n") == ""
+
+    def test_none_when_all_restricted(self):
+        assert self._pick("\t* 5180 MHz [36]\n\t  No IR\n") == ""
+
+    def test_none_without_phy(self):
+        with patch("hotspot.phy_of", return_value=""):
+            assert hotspot.pick_5ghz_channel("wlo1") == ""
+
+
+# ---------------------------------------------------------------------------
+# Command logic: cmd_set and cmd_start
+# ---------------------------------------------------------------------------
+
+class TestCommandLogic:
+    def test_cmd_set_match_preserves_band(self, isolated_env, write_settings):
+        write_settings(ssid="OldNet", password="oldpassword", band="5")
+        with patch("hotspot.is_active", return_value=False), patch("sys.exit") as mock_exit:
+            hotspot.cmd_set(["NewNet", "newpassword123", "match"])
+            mock_exit.assert_called_with(0)
+        s = hotspot.read_settings()
+        assert s["ssid"] == "NewNet"
+        assert s["band"] == "5"
+
+    def test_cmd_start_translates_channel_error(self, isolated_env):
+        with patch("hotspot.helper_installed", return_value=True), \
+             patch("hotspot.wifi_radio_on", return_value=True), \
+             patch("hotspot.wifi_device", return_value="wlo1"), \
+             patch("hotspot.station_connection", return_value=""), \
+             patch("subprocess.run") as mock_sub:
+            mock_sub.return_value = MagicMock(
+                returncode=1,
+                stderr="hostapd: ap0: IEEE 802.11 Hardware does not support configured channel\n",
+            )
+            with patch("hotspot.respond_error", side_effect=SystemExit(1)) as mock_err:
+                try:
+                    hotspot.cmd_start()
+                except SystemExit:
+                    pass
+                mock_err.assert_called_once()
+                err_msg = mock_err.call_args[0][0]
+                assert "regulatory restriction" in err_msg
+
+
+
+class TestStartGuards:
+    def _start(self, **extra):
+        patches = {"hotspot.helper_installed": True, "hotspot.wifi_device": "wlo1"}
+        patches.update(extra)
+        with patch("hotspot.respond_error", side_effect=SystemExit(1)) as err:
+            from contextlib import ExitStack
+            with ExitStack() as st:
+                for k, v in patches.items():
+                    st.enter_context(patch(k, return_value=v))
+                try:
+                    hotspot.cmd_start()
+                except SystemExit:
+                    pass
+            return err.call_args[0][0]
+
+    def test_radio_off(self, isolated_env):
+        assert "turned off" in self._start(**{"hotspot.wifi_radio_on": False})
+
+    def test_no_5ghz_channel(self, isolated_env, write_settings):
+        write_settings(band="5")
+        msg = self._start(**{"hotspot.wifi_radio_on": True, "hotspot.station_connection": "", "hotspot.pick_5ghz_channel": ""})
+        assert "5 GHz" in msg
+
+
+class TestSetViaEnvironment:
+    def test_env_secrets(self, isolated_env, monkeypatch):
+        monkeypatch.setenv("OMNISPOT_SSID", "EnvNet")
+        monkeypatch.setenv("OMNISPOT_PASS", "envpassword1")
+        with patch("hotspot.is_active", return_value=False), patch("sys.exit"):
+            hotspot.cmd_set(["2.4"])
+        s = hotspot.read_settings()
+        assert (s["ssid"], s["password"], s["band"]) == ("EnvNet", "envpassword1", "2.4")

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "omnispot.omarchy",
   "name": "Omnispot",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Nahom WG",
   "license": "MIT",
   "description": "Native mobile hotspot for Omarchy: share your connection with one toggle.",

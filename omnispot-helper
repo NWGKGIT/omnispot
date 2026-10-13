@@ -11,7 +11,8 @@ RUN=/run/omnispot
 
 fw() {
   local net=$1 action=$2
-  iptables -w "$action" INPUT -i "$AP" -j ACCEPT
+  iptables -w "$action" INPUT -i "$AP" -p udp -m multiport --dports 53,67 -j ACCEPT
+  iptables -w "$action" INPUT -i "$AP" -p tcp --dport 53 -j ACCEPT
   iptables -w "$action" FORWARD -i "$AP" -j ACCEPT
   iptables -w "$action" FORWARD -o "$AP" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
   iptables -w -t nat "$action" POSTROUTING -s "$net" ! -o "$AP" -j MASQUERADE
@@ -21,6 +22,11 @@ down() {
   for p in hostapd dnsmasq; do
     if [ -f "$RUN/$p.pid" ]; then
       pid=$(cat "$RUN/$p.pid")
+      # Only touch the process if the PID still belongs to the right program.
+      case "$(cat "/proc/$pid/comm" 2>/dev/null)" in
+        "$p") ;;
+        *) rm -f "$RUN/$p.pid"; continue ;;
+      esac
       # Graceful: SIGTERM first, wait up to 5 seconds, then SIGKILL.
       kill "$pid" 2>/dev/null
       for _ in $(seq 1 50); do
@@ -31,11 +37,17 @@ down() {
       rm -f "$RUN/$p.pid"
     fi
   done
+  if [ -f "$RUN/ip_forward" ]; then
+    sysctl -qw net.ipv4.ip_forward="$(cat "$RUN/ip_forward")" 2>/dev/null
+    rm -f "$RUN/ip_forward"
+  fi
   if [ -f "$RUN/subnet" ]; then
     fw "$(cat "$RUN/subnet")" -D 2>/dev/null
     rm -f "$RUN/subnet"
   else
     iptables -w -D INPUT -i "$AP" -j ACCEPT 2>/dev/null
+    iptables -w -D INPUT -i "$AP" -p udp -m multiport --dports 53,67 -j ACCEPT 2>/dev/null
+    iptables -w -D INPUT -i "$AP" -p tcp --dport 53 -j ACCEPT 2>/dev/null
     iptables -w -D FORWARD -i "$AP" -j ACCEPT 2>/dev/null
     iptables -w -D FORWARD -o "$AP" -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT 2>/dev/null
   fi
@@ -47,11 +59,17 @@ bad() { echo "$*" >&2; exit 1; }
 fail() { echo "$*" >&2; down; exit 1; }
 
 up() {
-  read -r dev; read -r ssid; read -r pass; read -r mode; read -r chan; read -r subnet
+  IFS= read -r dev; IFS= read -r ssid; IFS= read -r pass
+  IFS= read -r mode; IFS= read -r chan; IFS= read -r subnet
   # Everything here ends up in a root-owned config, so validate first.
   case "$dev" in ''|*[!a-zA-Z0-9]*) bad "Invalid Wi-Fi device" ;; esac
   case "$mode" in g|a) ;; *) bad "Invalid band" ;; esac
   case "$chan" in ''|*[!0-9]*) bad "Invalid channel" ;; esac
+  case "$subnet" in
+    [0-9]*.[0-9]*.[0-9]*.0/24) ;;
+    *) bad "Invalid subnet" ;;
+  esac
+  case "$subnet" in *[!0-9./]*) bad "Invalid subnet" ;; esac
   n=$(printf %s "$ssid" | wc -c)
   [ "$n" -ge 1 ] && [ "$n" -le 32 ] || bad "Network name must be 1-32 characters"
   [ ${#pass} -ge 8 ] && [ ${#pass} -le 63 ] || bad "Password must be 8-63 characters"
@@ -60,7 +78,6 @@ up() {
   # Validate and derive subnet components.
   # subnet looks like "10.42.0.0/24": extract the first three octets.
   NET=$(echo "$subnet" | cut -d/ -f1 | cut -d. -f1-3)
-  case "$NET" in ''|*[!0-9.]*) NET="10.42.0" ;; esac
 
   down
   mkdir -p "$RUN" && chmod 755 "$RUN"
@@ -88,8 +105,12 @@ rsn_pairwise=CCMP
 wpa_passphrase=$pass
 CONF
 )
-  out=$(hostapd -B -P "$RUN/hostapd.pid" "$RUN/hostapd.conf" 2>&1) ||
-    fail "hostapd: $(printf '%s\n' "$out" | grep -v '^Configuration file' | tail -1)"
+
+  out=$(hostapd -B -P "$RUN/hostapd.pid" "$RUN/hostapd.conf" 2>&1) || {
+    err_msg=$(printf '%s\n' "$out" | grep -E -v '^(Configuration file|nl80211: deinit|hostapd_free_|.*AP-DISABLED|.*UNINITIALIZED)' | grep -E '(Hardware does not support|failed|error|Could not|invalid|not found)' | tail -1)
+    [ -z "$err_msg" ] && err_msg=$(printf '%s\n' "$out" | grep -E -v '^(Configuration file|nl80211: deinit|hostapd_free_|.*AP-DISABLED|.*UNINITIALIZED)' | tail -1)
+    fail "hostapd: ${err_msg:-Could not start access point}"
+  }
 
   ip addr flush dev "$AP"
   ip addr add "$NET.1/24" dev "$AP"
@@ -101,6 +122,7 @@ CONF
     --dhcp-leasefile="$RUN/leases" --pid-file="$RUN/dnsmasq.pid" ||
     fail "Could not start dnsmasq"
 
+  [ -f "$RUN/ip_forward" ] || sysctl -n net.ipv4.ip_forward > "$RUN/ip_forward"
   sysctl -qw net.ipv4.ip_forward=1
   echo "$subnet" > "$RUN/subnet"
   fw "$subnet" -I || fail "Could not set up firewall rules"
