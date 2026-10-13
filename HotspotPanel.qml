@@ -209,7 +209,8 @@ KeyboardPanel {
       }
       Text {
         Layout.fillWidth: true
-        text: "Matched to Wi-Fi (" + (root.status.station || "current network") + ")"
+        wrapMode: Text.WordWrap
+        text: "While connected to " + (root.status.station || "Wi-Fi") + ", the hotspot uses that network's band. Your choice applies when Wi-Fi is disconnected."
         color: root.dim
         font.family: root.fontFamily
         font.pixelSize: Style.font.body
@@ -219,7 +220,6 @@ KeyboardPanel {
     Dropdown {
       id: bandDropdown
       Layout.fillWidth: true
-      visible: !root.sharingWifi
       showLabel: false
       options: [{value: "any", label: "Any available"}, {value: "2.4", label: "2.4 GHz"}, {value: "5", label: "5 GHz"}]
       fontFamily: root.fontFamily
