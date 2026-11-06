@@ -55,6 +55,9 @@ omarchy plugin update omnispot.omarchy
 omarchy restart shell
 ```
 
+Restart the shell after updating to replace cached QML components. See the
+[changelog](CHANGELOG.md) for release details.
+
 ### Uninstallation
 
 Remove system-level files installed during setup:

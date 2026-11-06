@@ -1,6 +1,6 @@
 [project]
 name = "omnispot"
-version = "1.0.0"
+version = "1.0.3"
 description = "Native mobile hotspot plugin for Omarchy"
 readme = "README.md"
 requires-python = ">=3.11"
