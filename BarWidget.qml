@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 
 BarWidget {
@@ -62,16 +63,11 @@ BarWidget {
     tooltipText: root.on
       ? "Hotspot on · " + state.status.ssid + "\n" + (root.clients === 1 ? "1 device" : root.clients + " devices") + " connected"
       : "Hotspot off\nRight-click to turn on"
-    iconComponent: Component {
-      Text {
-        anchors.centerIn: parent
-        text: "󰀂"
-        color: root.on ? Color.accent : (root.bar ? root.bar.barForeground : Color.foreground)
-        opacity: root.on || state.busy ? 1 : 0.6
-        font.family: "Symbols Nerd Font"
-        font.pixelSize: Style.bar.iconFont
-      }
-    }
+    // Let the bar center the glyph by its painted bounds.
+    text: "󰀂"
+    fontFamily: "Symbols Nerd Font"
+    foreground: root.on ? Commons.Color.accent : (root.bar ? root.bar.barForeground : Commons.Color.foreground)
+    opacity: root.on || state.busy ? 1 : 0.6
     onPressed: function(code) {
       if (code === Qt.RightButton) {
         if (state.setupNeeded && !root.on) root.open()
